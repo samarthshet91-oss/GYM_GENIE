@@ -19,12 +19,12 @@
 
 .light {
   color-scheme: light;
-  --bg: #eef7f6;
-  --bg-soft: #f8fffd;
-  --bg-card: rgba(255, 255, 255, 0.74);
-  --line: rgba(3, 105, 161, 0.14);
+  --bg: #f6fffd;
+  --bg-soft: #edf9f6;
+  --bg-card: rgba(255, 255, 255, 0.78);
+  --line: rgba(14, 116, 144, 0.15);
   --text: #06121f;
-  --muted: #5d6b7c;
+  --muted: #64748b;
 }
 
 * {
@@ -40,19 +40,20 @@ body {
   min-height: 100vh;
   font-family: "Manrope", sans-serif;
   background:
-    radial-gradient(circle at 20% 8%, rgba(34, 211, 238, 0.22), transparent 24%),
-    radial-gradient(circle at 78% 12%, rgba(74, 222, 128, 0.18), transparent 22%),
-    radial-gradient(circle at 50% 100%, rgba(14, 165, 233, 0.12), transparent 34%),
-    linear-gradient(180deg, #01030a 0%, #07111f 48%, #02050b 100%);
+    radial-gradient(circle at 20% 8%, rgba(0, 255, 180, 0.10), transparent 24%),
+    radial-gradient(circle at 78% 12%, rgba(0, 180, 255, 0.08), transparent 22%),
+    radial-gradient(circle at 50% 100%, rgba(0, 255, 200, 0.06), transparent 34%),
+    linear-gradient(180deg, #000000 0%, #020617 48%, #000000 100%);
   color: var(--text);
   overflow-x: hidden;
 }
 
 .light body {
   background:
-    radial-gradient(circle at 15% 10%, rgba(34, 211, 238, 0.12), transparent 24%),
-    radial-gradient(circle at 85% 8%, rgba(52, 211, 153, 0.12), transparent 24%),
-    linear-gradient(180deg, #f7fbff 0%, #edf4f8 100%);
+    radial-gradient(circle at 15% 10%, rgba(34, 211, 238, 0.16), transparent 24%),
+    radial-gradient(circle at 85% 8%, rgba(52, 211, 153, 0.14), transparent 24%),
+    radial-gradient(circle at 50% 100%, rgba(186, 230, 253, 0.32), transparent 34%),
+    linear-gradient(180deg, #fbfffe 0%, #effaf7 100%);
 }
 
 #root {
@@ -68,6 +69,13 @@ body {
   position: relative;
 }
 
+.light .app-bg {
+  background:
+    radial-gradient(circle at 10% 8%, rgba(34, 211, 238, 0.12), transparent 25%),
+    radial-gradient(circle at 92% 14%, rgba(74, 222, 128, 0.1), transparent 23%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(236, 253, 245, 0.48));
+}
+
 .app-bg::before {
   content: "";
   position: fixed;
@@ -78,6 +86,12 @@ body {
     linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
   background-size: 34px 34px;
   mask-image: radial-gradient(circle at top, black, transparent 72%);
+}
+
+.light .app-bg::before {
+  background-image:
+    linear-gradient(rgba(14, 116, 144, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(14, 116, 144, 0.03) 1px, transparent 1px);
 }
 
 .phone-frame {
@@ -103,6 +117,13 @@ body {
       0 0 0 10px rgba(255, 255, 255, 0.03),
       0 0 90px rgba(34, 211, 238, 0.14);
   }
+
+  .light .phone-frame {
+    border-color: rgba(14, 116, 144, 0.12);
+    box-shadow:
+      0 34px 100px rgba(15, 23, 42, 0.14),
+      0 0 0 10px rgba(255, 255, 255, 0.54);
+  }
 }
 
 .glass-card {
@@ -117,7 +138,7 @@ body {
 
 .light .glass-card {
   box-shadow:
-    0 25px 60px rgba(15, 23, 42, 0.12),
+    0 22px 48px rgba(15, 23, 42, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
@@ -144,6 +165,13 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.45);
 }
 
+.light .neon-button {
+  box-shadow:
+    0 14px 30px rgba(14, 165, 233, 0.16),
+    0 8px 24px rgba(34, 197, 94, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
 .neon-btn {
   background: linear-gradient(135deg, var(--cyan) 0%, var(--green) 70%, var(--lime) 100%);
   color: #031018;
@@ -154,6 +182,17 @@ body {
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.055);
   color: var(--text);
+}
+
+.soft-button {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.055);
+  color: var(--text);
+}
+
+.light .soft-btn,
+.light .soft-button {
+  background: rgba(255, 255, 255, 0.66);
 }
 
 .input-shell {
@@ -175,7 +214,7 @@ body {
   width: 100%;
   max-width: 430px;
   margin: 0 auto;
-  padding: 18px 16px 110px;
+  padding: 18px 16px 132px;
 }
 
 .hide-scrollbar::-webkit-scrollbar {
@@ -203,4 +242,15 @@ body {
     radial-gradient(circle at 50% 50%, rgba(34, 211, 238, 0.75), transparent 33%),
     radial-gradient(circle at 72% 70%, rgba(74, 222, 128, 0.7), transparent 30%),
     linear-gradient(145deg, rgba(15, 23, 42, 0.9), rgba(3, 7, 18, 0.6));
+}
+.input-shell select,
+select.input-shell{
+  background: rgba(15, 23, 42, 0.95);
+  color: white;
+}
+
+.input-shell option,
+select option{
+  background: #0f172a;
+  color: white;
 }

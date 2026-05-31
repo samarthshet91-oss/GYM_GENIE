@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { Bot, Dumbbell, PlayCircle, Salad, Sparkles, TrendingUp } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import gymgenieLogo from "../assets/gymgenie-logo.png";
 import BrandMark from "../components/BrandMark";
 import GlassCard from "../components/GlassCard";
 import Modal from "../components/Modal";
@@ -35,9 +36,15 @@ export default function Landing() {
           </div>
 
           <div className="relative z-10 mt-12 text-center">
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.5 }} className="mx-auto grid h-28 w-28 place-items-center rounded-[36px] bg-white/5 neon-ring">
-              <BrandMark />
-            </motion.div>
+            <motion.img
+              src={gymgenieLogo}
+              alt="GymGenie AI"
+              className="mx-auto w-[280px] max-w-[86%] object-contain drop-shadow-[0_0_34px_rgba(34,211,238,.36)]"
+              initial={{ scale: 0.9, opacity: 0, y: 12, filter: "blur(10px)" }}
+              animate={{ scale: 1, opacity: 1, y: 0, filter: "blur(0px)" }}
+              transition={{ duration: 0.72, ease: "easeOut" }}
+              draggable="false"
+            />
             <h1 className="mt-8 font-display text-[44px] leading-[0.95]">Train Smarter with AI</h1>
             <p className="mx-auto mt-4 max-w-[310px] text-sm leading-6 text-muted">
               Your personal AI trainer, dietician, and motivation coach.

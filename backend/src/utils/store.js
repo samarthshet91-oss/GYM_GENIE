@@ -1,6 +1,7 @@
 export const memory = {
   users: [],
-  progress: []
+  progress: [],
+  dailydiet: []
 };
 
 export function publicUser(user) {

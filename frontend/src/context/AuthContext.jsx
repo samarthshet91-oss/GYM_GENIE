@@ -28,8 +28,8 @@ export function AuthProvider({ children }) {
         const data = await apiRequest("/api/user/profile");
         setUser(data.user);
         localStorage.setItem("gymgenie_user", JSON.stringify(data.user));
-      } catch {
-        logout();
+      } catch (error){
+        console.error("Error refreshing profile:", error);
       } finally {
         setAuthChecked(true);
       }
@@ -38,12 +38,18 @@ export function AuthProvider({ children }) {
     refreshProfile();
   }, [token]);
 
-  function saveSession(data) {
-    setToken(data.token);
-    setUser(data.user);
-    localStorage.setItem("gymgenie_token", data.token);
-    localStorage.setItem("gymgenie_user", JSON.stringify(data.user));
-  }
+   function saveSession(data) {
+  console.log("LOGIN RESPONSE:", data);
+
+  const tokenValue = data.token;
+  const userValue = data.user;
+
+  setToken(tokenValue);
+  setUser(userValue);
+
+  localStorage.setItem("gymgenie_token", tokenValue);
+  localStorage.setItem("gymgenie_user", JSON.stringify(userValue));
+}
 
   async function login(email, password) {
     const data = await apiRequest("/api/auth/login", {

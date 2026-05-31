@@ -1,16 +1,21 @@
-import { Sparkles } from "lucide-react";
+import faviconDark from "../assets/favicon-dark.png";
+import faviconLight from "../assets/favicon-light.png";
+import logoDark from "../assets/logo-dark.png";
+import logoLight from "../assets/logo-light.png";
+import { useAuth } from "../context/AuthContext";
 
-export default function BrandMark({ small = false }) {
-  const size = small ? "h-12 w-12 rounded-2xl" : "h-16 w-16 rounded-[1.75rem]";
+export default function BrandMark({ small = false, logo = false, className = "" }) {
+  const { theme } = useAuth();
+  const isLight = theme === "light";
+  const src = logo ? (isLight ? logoLight : logoDark) : (isLight ? faviconLight : faviconDark);
+  const size = small ? "h-10 w-10 rounded-2xl" : logo ? "h-24 w-24 rounded-[2rem]" : "h-16 w-16 rounded-[1.75rem]";
 
   return (
-    <div
-      className={`relative grid ${size} place-items-center overflow-hidden bg-gradient-to-br from-cyan-300 via-emerald-300 to-lime-300 text-slate-950 neon-ring`}
-    >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_22%,rgba(255,255,255,.85),transparent_24%)]" />
-      <div className="absolute h-[58%] w-[58%] rounded-full border-[3px] border-slate-950/80" />
-      <div className="absolute h-[30%] w-[30%] rounded-full bg-slate-950/90" />
-      <Sparkles className="relative -right-3 -top-3" size={small ? 13 : 16} strokeWidth={3} />
-    </div>
+    <img
+      src={src}
+      alt="GymGenie AI"
+      className={`${size} object-cover ${className}`}
+      draggable="false"
+    />
   );
 }

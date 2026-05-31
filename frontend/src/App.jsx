@@ -12,6 +12,8 @@ import Progress from "./pages/Progress";
 import Register from "./pages/Register";
 import Splash from "./pages/Splash";
 import Workout from "./pages/Workout";
+import { useEffect, useState } from "react";
+import IntroScreen from "./components/IntroScreen";
 
 function AnimatedPage({ children }) {
   return (
@@ -23,6 +25,19 @@ function AnimatedPage({ children }) {
 
 export default function App() {
   const location = useLocation();
+  const [showIntro, setShowIntro] = useState(true);
+
+useEffect(() => {
+  const timer = setTimeout(() => {
+    setShowIntro(false);
+  }, 10000);
+
+  return () => clearTimeout(timer);
+}, []);
+
+if (showIntro) {
+  return <IntroScreen onFinish={() => setShowIntro(false)} />;
+}
 
   return (
     <AnimatePresence mode="wait">

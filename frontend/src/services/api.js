@@ -1,21 +1,25 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
-
-const getToken = () => localStorage.getItem("gymgenie_token");
+const API_BASE = "http://localhost:5000";
 
 export async function apiRequest(path, options = {}) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const token = localStorage.getItem("gymgenie_token");
+  
+
+  const response = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
-      ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
-      ...(options.headers || {})
-    }
+      Authorization: token ? `Bearer ${token}` : "",
+      ...(options.headers || {}),
+    },
   });
 
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(data.message || "Something went wrong");
+    const error = new Error(data.message || data.error || "Something went wrong");
+    error.status = response.status;
+    error.data = data;
+    throw error;
   }
 
   return data;

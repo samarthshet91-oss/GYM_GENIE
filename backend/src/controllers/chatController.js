@@ -1,4 +1,4 @@
-import { coachChat } from "../services/geminiService.js";
+import { coachChat } from "../services/grokService.js";
 import { getUserById } from "../services/userService.js";
 
 export async function chat(req, res, next) {

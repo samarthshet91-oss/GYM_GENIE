@@ -104,7 +104,7 @@ export async function ensureProgress(userId, startingWeight = 0) {
         weight_history: startingWeight ? [startingWeight] : [],
         workouts_completed: 0,
         streak: 0,
-        calories: {}
+        calories: 0
       });
     }
     return;
@@ -114,4 +114,3 @@ export async function ensureProgress(userId, startingWeight = 0) {
     memory.progress.push({ id: uid(), user_id: userId, weight_history: startingWeight ? [startingWeight] : [], workouts_completed: 0, streak: 0, calories: 0 });
   }
 }
-
