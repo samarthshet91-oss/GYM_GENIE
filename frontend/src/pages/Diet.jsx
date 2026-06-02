@@ -1,5 +1,5 @@
 import { CheckCircle2, Flame, Home, Salad, Sparkles, Utensils } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import GlassCard from "../components/GlassCard";
 import SecondaryHeader from "../components/SecondaryHeader";
 import { useAuth } from "../context/AuthContext";
@@ -7,14 +7,22 @@ import { apiRequest } from "../services/api";
 
 const meals = [
   { label: "Breakfast", key: "breakfast_done" },
-  { label: "Lunch",     key: "lunch_done" },
-  { label: "Snacks",    key: "snack_done" },
-  { label: "Dinner",    key: "dinner_done" }
+  { label: "Lunch", key: "lunch_done" },
+  { label: "Snacks", key: "snack_done" },
+  { label: "Dinner", key: "dinner_done" }
 ];
+
+const fallbackDiet = [
+  "Breakfast: Oats with curd or milk, fruit, and a simple protein option.",
+  "Lunch: Rice or roti with dal, vegetables, curd, and lean protein.",
+  "Snacks: Roasted chana, fruit, nuts, sprouts, or a protein shake.",
+  "Dinner: Light protein bowl with vegetables and moderate carbs.",
+  "Daily calorie estimate: Keep meals protein-forward and easy to repeat."
+].join("\n");
 
 function safeText(value, fallback = "") {
   if (value === null || value === undefined || value === "") return fallback;
-  if (typeof value === "string" || typeof value === "number") return value;
+  if (typeof value === "string" || typeof value === "number") return String(value);
   return fallback;
 }
 
@@ -26,105 +34,115 @@ function cacheKey(userId) {
   return `gymgenie_daily_diet_${userId || "guest"}_${todayKey()}`;
 }
 
-function cleanDietLine(line) {
-  return line
-    .replace(/^#+\s*/, "")
-    .replace(/^\s*[-*]\s*/, "")
+function stripMarkup(value) {
+  return String(value || "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
     .replace(/\*\*/g, "")
+    .replace(/__+/g, "")
+    .replace(/`+/g, "")
+    .replace(/^#+\s*/gm, "")
     .trim();
+}
+
+function normalizeDietText(text) {
+  return stripMarkup(text)
+    .replace(/\r/g, "")
+    .replace(/\s+(Breakfast|Lunch|Snacks?|Dinner|Daily calorie estimate|Practical substitutions)\s*:/gi, "\n$1:")
+    .split("\n")
+    .map((line) => line.replace(/^\s*[-*]\s*/, "").trim())
+    .filter(Boolean)
+    .join("\n");
 }
 
 function parseDietPlan(text) {
   const parsed = { Breakfast: "", Lunch: "", Snacks: "", Dinner: "", insight: "" };
+  const normalized = normalizeDietText(text);
+  let currentSection = "";
 
-  String(text || "")
-    .split("\n")
-    .map(cleanDietLine)
-    .filter(Boolean)
-    .forEach((line) => {
-      const match = line.match(/^(Breakfast|Lunch|Snacks?|Dinner|Daily calorie estimate|Practical substitutions)\s*:\s*(.+)$/i);
-      if (!match) return;
+  normalized.split("\n").forEach((line) => {
+    const match = line.match(/^(Breakfast|Lunch|Snacks?|Dinner|Daily calorie estimate|Practical substitutions)\s*[:\-]\s*(.*)$/i);
+
+    if (match) {
       const label = match[1].toLowerCase();
-      const value = match[2].trim();
-      if (label === "breakfast") parsed.Breakfast = value;
-      if (label === "lunch") parsed.Lunch = value;
-      if (label === "snack" || label === "snacks") parsed.Snacks = value;
-      if (label === "dinner") parsed.Dinner = value;
-      if (label === "daily calorie estimate") parsed.insight = value;
-      if (label === "practical substitutions" && !parsed.insight) parsed.insight = value;
-    });
+      const value = stripMarkup(match[2]).trim();
+
+      if (label === "breakfast") currentSection = "Breakfast";
+      if (label === "lunch") currentSection = "Lunch";
+      if (label === "snack" || label === "snacks") currentSection = "Snacks";
+      if (label === "dinner") currentSection = "Dinner";
+      if (label === "daily calorie estimate" || label === "practical substitutions") currentSection = "insight";
+
+      if (value) {
+        parsed[currentSection] = parsed[currentSection] ? `${parsed[currentSection]} ${value}` : value;
+      }
+      return;
+    }
+
+    if (currentSection) {
+      const value = stripMarkup(line).trim();
+      if (value) {
+        parsed[currentSection] = parsed[currentSection] ? `${parsed[currentSection]} ${value}` : value;
+      }
+    }
+  });
 
   return parsed;
 }
 
+function mealStateFromRow(row = {}) {
+  return {
+    Breakfast: Boolean(row.breakfast_done),
+    Lunch: Boolean(row.lunch_done),
+    Snacks: Boolean(row.snack_done),
+    Dinner: Boolean(row.dinner_done)
+  };
+}
+
 export default function Diet() {
   const { user } = useAuth();
-  const [profile, setProfile] = useState(null);
   const [diet, setDiet] = useState("Loading meal plan...");
-  // P2 FIX: checkedMeals keyed by meal label for clear mapping
-  const [checkedMeals, setCheckedMeals] = useState({
-    Breakfast: false,
-    Lunch: false,
-    Snacks: false,
-    Dinner: false,
-  });
+  const [checkedMeals, setCheckedMeals] = useState(mealStateFromRow());
 
-  useEffect(() => {
-    async function loadProfile() {
-      try {
-        const data = await apiRequest("/api/user/profile");
-        setProfile(data.user);
-      } catch {
-        setProfile(null);
-      }
-    }
-    loadProfile();
-  }, []);
-
-  // P2 + P3 FIX: Load today's diet once. Backend now stores it in daily_diet table.
-  // Same-day refreshes reuse the stored AI output — no regeneration.
   useEffect(() => {
     if (!user?.id) return;
 
+    let isMounted = true;
+
     async function loadTodayDiet() {
-      const savedDiet = localStorage.getItem(cacheKey(user.id));
-
-      // Show cached text immediately while we fetch
-      if (savedDiet) setDiet(savedDiet);
-
       try {
         const data = await apiRequest("/api/diet/today");
         console.log("Daily diet response:", data);
+
         const row = data.diet || {};
-        const generatedDiet = safeText(
-          row.diet,
-          savedDiet || "Protein-first breakfast, balanced lunch, smart snack, and a lighter dinner."
-        );
+        const cleanDiet = normalizeDietText(row.diet || fallbackDiet);
 
-        setDiet(generatedDiet);
-        localStorage.setItem(cacheKey(user.id), generatedDiet);
-
-        // P2 FIX: restore meal completion state from Supabase row after refresh
-        setCheckedMeals({
-          Breakfast: Boolean(row.breakfast_done),
-          Lunch:     Boolean(row.lunch_done),
-          Snacks:    Boolean(row.snack_done),
-          Dinner:    Boolean(row.dinner_done),
-        });
+        if (!isMounted) return;
+        setDiet(cleanDiet);
+        setCheckedMeals(mealStateFromRow(row));
+        localStorage.setItem(cacheKey(user.id), cleanDiet);
       } catch (error) {
         console.error("Daily diet load failed:", error.data || error);
-        setDiet(savedDiet || "Protein-first breakfast, balanced lunch, smart snack, and a lighter dinner.");
+        const cached = localStorage.getItem(cacheKey(user.id));
+        if (isMounted) setDiet(normalizeDietText(cached || fallbackDiet));
       }
     }
 
     loadTodayDiet();
+    return () => {
+      isMounted = false;
+    };
   }, [user?.id]);
 
-  // P2 FIX: optimistic toggle with rollback on error; reads DB state to confirm
   async function toggleMeal(meal) {
     const nextValue = !checkedMeals[meal.label];
     const previous = { ...checkedMeals };
-    setCheckedMeals((prev) => ({ ...prev, [meal.label]: nextValue }));
+    setCheckedMeals((current) => ({ ...current, [meal.label]: nextValue }));
 
     try {
       const data = await apiRequest("/api/diet/today", {
@@ -132,21 +150,14 @@ export default function Diet() {
         body: JSON.stringify({ [meal.key]: nextValue })
       });
       console.log("Meal completion saved:", data);
-      const row = data.diet || {};
-      // Sync with actual DB values
-      setCheckedMeals({
-        Breakfast: Boolean(row.breakfast_done),
-        Lunch:     Boolean(row.lunch_done),
-        Snacks:    Boolean(row.snack_done),
-        Dinner:    Boolean(row.dinner_done),
-      });
+      setCheckedMeals(mealStateFromRow(data.diet));
     } catch (error) {
       console.error("Failed to save meal completion:", error.data || error);
-      setCheckedMeals(previous); // rollback
+      setCheckedMeals(previous);
     }
   }
 
-  const parsedDiet = parseDietPlan(diet);
+  const parsedDiet = useMemo(() => parseDietPlan(diet), [diet]);
   const eaten = Object.values(checkedMeals).filter(Boolean).length;
   const calorieGoal = 2200;
   const eatenCalories = eaten * 480;
@@ -156,18 +167,17 @@ export default function Diet() {
       <div className="pointer-events-none absolute -left-24 top-32 h-56 w-56 rounded-full bg-emerald-300/14 blur-[100px]" />
       <SecondaryHeader title="Diet" icon={Salad} />
       <div className="mb-5">
-        <p className="text-sm font-bold text-emerald-500 dark:text-emerald-300">Diet Plan</p>
-        <h1 className="mt-1 font-display text-[32px] leading-none">Today's Fuel</h1>
-        <p className="mt-2 text-sm text-muted">{safeText(profile?.diet_type, "Balanced")} meals tuned for {safeText(profile?.goal, "your goal")}.</p>
+        <p className="text-sm font-bold text-emerald-600 dark:text-emerald-300">Diet Plan</p>
+        <h1 className="mt-1 font-display text-[32px] leading-none text-[var(--text)]">Today's Fuel</h1>
+        <p className="mt-2 text-sm text-muted">{safeText(user?.diet_type, "Balanced")} meals tuned for {safeText(user?.goal, "your goal")}.</p>
       </div>
 
-      {/* Calorie progress card */}
       <GlassCard className="relative overflow-hidden rounded-[32px] p-5" hover={false}>
         <div className="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-cyan-300/20 blur-[72px]" />
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.24em] text-cyan-500 dark:text-cyan-300">Calories</p>
-            <h2 className="mt-1 font-display text-3xl">{eatenCalories}/{calorieGoal}</h2>
+            <p className="text-xs font-bold uppercase tracking-[0.24em] text-cyan-600 dark:text-cyan-300">Calories</p>
+            <h2 className="mt-1 font-display text-3xl text-[var(--text)]">{eatenCalories}/{calorieGoal}</h2>
           </div>
           <div className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-cyan-300 to-emerald-300 text-slate-950">
             <Flame size={24} />
@@ -178,32 +188,30 @@ export default function Diet() {
         </div>
       </GlassCard>
 
-      {/* AI insight card */}
       <GlassCard className="mt-4 rounded-[28px] p-5" hover={false}>
         <div className="flex items-start gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-2xl bg-black/5 dark:bg-white/5 text-cyan-500 dark:text-cyan-300">
+          <div className="grid h-11 w-11 place-items-center rounded-2xl bg-black/5 text-cyan-600 dark:bg-white/5 dark:text-cyan-300">
             <Sparkles size={18} />
           </div>
           <div>
-            <p className="font-bold">AI diet insight</p>
+            <p className="font-bold text-[var(--text)]">AI diet insight</p>
             <p className="mt-2 text-sm leading-6 text-muted">{parsedDiet.insight || "Keep meals simple, protein-forward, and easy to repeat."}</p>
           </div>
         </div>
       </GlassCard>
 
-      {/* Meal cards */}
       <div className="mt-4 grid gap-4">
         {meals.map((meal, index) => (
           <GlassCard key={meal.label} className="rounded-[28px] p-5" hover={false}>
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-start gap-3">
-                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-black/5 dark:bg-white/5 text-emerald-600 dark:text-emerald-300">
+                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-black/5 text-emerald-700 dark:bg-white/5 dark:text-emerald-300">
                   <Utensils size={19} />
                 </div>
                 <div className="min-w-0">
-                  <h2 className="font-display text-2xl">{meal.label}</h2>
+                  <h2 className="font-display text-2xl text-[var(--text)]">{meal.label}</h2>
                   <p className="mt-2 text-sm leading-6 text-muted">{safeText(parsedDiet[meal.label], "Whole-food option with easy protein and carbs.")}</p>
-                  <p className="mt-3 text-xs font-bold uppercase tracking-[0.22em] text-emerald-500 dark:text-emerald-300">{420 + index * 110} kcal</p>
+                  <p className="mt-3 text-xs font-bold uppercase tracking-[0.22em] text-emerald-600 dark:text-emerald-300">{420 + index * 110} kcal</p>
                 </div>
               </div>
               <button
@@ -219,14 +227,13 @@ export default function Diet() {
         ))}
       </div>
 
-      {/* Hostel mode */}
       <GlassCard className="mt-4 p-5" hover={false}>
         <div className="flex items-center gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-2xl bg-black/5 dark:bg-white/5 text-cyan-500 dark:text-cyan-300">
+          <div className="grid h-11 w-11 place-items-center rounded-2xl bg-black/5 text-cyan-600 dark:bg-white/5 dark:text-cyan-300">
             <Home size={18} />
           </div>
           <div>
-            <p className="font-bold">Hostel mode suggestions</p>
+            <p className="font-bold text-[var(--text)]">Hostel mode suggestions</p>
             <p className="mt-1 text-sm leading-6 text-muted">Keep curd, fruit, eggs or paneer, roasted chana, and quick oats ready for low-friction meals.</p>
           </div>
         </div>

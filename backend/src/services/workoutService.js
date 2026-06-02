@@ -1,64 +1,92 @@
-// services/workoutService.js
-// Mirrors the pattern of dietService.js — stores one AI-generated workout per user per day.
-// Table required: daily_workout (id, user_id, date, workout TEXT, created_at)
-// Recommended SQL:
-//   create table daily_workout (
-//     id uuid primary key default gen_random_uuid(),
-//     user_id uuid references auth.users not null,
-//     date date not null,
-//     workout text,
-//     created_at timestamptz default now(),
-//     unique(user_id, date)
-//   );
-
-import {supabase} from "../config/supabase.js";
+import { isSupabaseReady, supabase } from "../config/supabase.js";
 import { generateWorkout } from "./grokService.js";
+import { memory } from "../utils/store.js";
+
+const TABLE = "daily_workout";
+const DATE_COLUMNS = ["workout_date", "date"];
+const WORKOUT_COLUMNS = ["workout", "workout_plan", "generated_workout", "plan"];
 
 function todayDate() {
-  return new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+  return new Date().toISOString().slice(0, 10);
 }
 
-/**
- * Load today's workout from DB. If none exists yet, generate via AI, persist it, and return it.
- */
-export async function getOrCreateDailyWorkout(userId, userParams = {}) {
-  const today = todayDate();
+function hasColumnError(error) {
+  return error?.code === "42703" || String(error?.message || "").toLowerCase().includes("column");
+}
 
-  // 1. Try to load an existing row for today
-  const { data: existing, error: fetchError } = await supabase
-    .from("daily_workout")
+function getWorkoutText(row) {
+  const column = WORKOUT_COLUMNS.find((key) => Object.prototype.hasOwnProperty.call(row || {}, key));
+  return column ? row[column] : "";
+}
+
+function setWorkoutText(row, value) {
+  const column = WORKOUT_COLUMNS.find((key) => Object.prototype.hasOwnProperty.call(row || {}, key)) || "workout";
+  return { ...row, [column]: value };
+}
+
+function normalizeWorkout(row) {
+  return {
+    ...row,
+    workout: getWorkoutText(row)
+  };
+}
+
+function createBaseRow(userId, dateColumn, dateValue) {
+  return {
+    user_id: userId,
+    [dateColumn]: dateValue
+  };
+}
+
+async function findTodayRow(userId, dateValue) {
+  for (const dateColumn of DATE_COLUMNS) {
+    const { data, error } = await supabase
+      .from(TABLE)
+      .select("*")
+      .eq("user_id", userId)
+      .eq(dateColumn, dateValue)
+      .maybeSingle();
+
+    if (!error) return { row: data, dateColumn };
+    if (!hasColumnError(error)) throw error;
+  }
+
+  throw new Error(`${TABLE} must have either workout_date or date column`);
+}
+
+async function insertTodayRow(row) {
+  const { data, error } = await supabase
+    .from(TABLE)
+    .insert(row)
     .select("*")
-    .eq("user_id", userId)
-    .eq("date", today)
-    .maybeSingle();
-
-  if (fetchError) {
-    console.error("daily_workout fetch error:", fetchError.message);
-    throw fetchError;
-  }
-
-  // 2. If a row already has a workout, return it
-  if (existing?.workout) {
-    return existing;
-  }
-
-  // 3. Generate a new AI workout
-  const workoutText = await generateWorkout(userParams);
-
-  // 4. Upsert (handles race conditions gracefully)
-  const { data: upserted, error: upsertError } = await supabase
-    .from("daily_workout")
-    .upsert(
-      { user_id: userId, date: today, workout: workoutText },
-      { onConflict: "user_id,date", ignoreDuplicates: false }
-    )
-    .select()
     .single();
 
-  if (upsertError) {
-    console.error("daily_workout upsert error:", upsertError.message);
-    throw upsertError;
+  if (error) throw error;
+  return data;
+}
+
+export async function getOrCreateDailyWorkout(userId, userParams = {}) {
+  const dateValue = todayDate();
+
+  if (!isSupabaseReady) {
+    let row = memory.dailyWorkout?.find((item) => item.user_id === userId && item.workout_date === dateValue);
+    if (!row) {
+      const generatedWorkout = await generateWorkout(userParams);
+      row = setWorkoutText(createBaseRow(userId, "workout_date", dateValue), generatedWorkout);
+      memory.dailyWorkout = [...(memory.dailyWorkout || []), row];
+    }
+    return normalizeWorkout(row);
   }
 
-  return upserted;
+  const { row, dateColumn } = await findTodayRow(userId, dateValue);
+  if (row) {
+    console.log("Loaded daily workout from Supabase:", { userId, date: dateValue });
+    return normalizeWorkout(row);
+  }
+
+  const generatedWorkout = await generateWorkout(userParams);
+  console.log("Generated daily workout:", { userId, date: dateValue });
+
+  const inserted = await insertTodayRow(setWorkoutText(createBaseRow(userId, dateColumn, dateValue), generatedWorkout));
+  return normalizeWorkout(inserted);
 }
